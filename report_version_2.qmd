@@ -1,0 +1,85 @@
+---
+lang: it
+format:
+  pdf:
+    pdf-engine: pdflatex
+    papersize: a4
+    geometry:
+      - portrait
+      - margin = 10mm
+      - bottom = 25mm
+    fontsize: 10pt
+    linestretch: 1
+    include-in-header:
+      - text: |
+          \usepackage{fancyhdr}
+          \usepackage{lastpage}
+          \newcount\hours
+          \newcount\minutes
+          \newcommand{\printtime}{%
+            \hours=\time
+            \divide\hours by 60
+            \minutes=\time
+            \multiply\hours by 60
+            \advance\minutes by -\hours
+            \divide\hours by 60
+            \ifnum\hours<10 0\fi\the\hours:%
+            \ifnum\minutes<10 0\fi\the\minutes:00%
+          }
+          \pagestyle{fancy}
+          \fancyhf{} % Ripulisce i default
+          \renewcommand{\headrulewidth}{0pt}
+          \renewcommand{\footrulewidth}{0pt}
+          \fancyfoot[L]{\texttt{Data stampa:~\the\day-\ifnum\month<10 0\fi\the\month-\the\year\ \printtime}}
+          \fancyfoot[R]{\texttt{Pagina \thepage\ di \pageref*{LastPage}}}
+---
+
+```{r}
+#| echo: false
+#| results: asis
+
+options(width = 150, tibble.width = Inf)
+dati_caricati <- readRDS("data/export.rds")
+
+if (is.environment(dati_caricati)) {
+  lista_df <- as.list(dati_caricati)
+} else if (is.list(dati_caricati)) {
+  lista_df <- dati_caricati
+} else {
+  lista_df <- list(dati_export = dati_caricati)
+}
+
+if (length(lista_df) == 0) {
+  cat("Nessun data frame rilevato nel file export.rds.\n")
+} else {
+  nomi_df <- names(lista_df)
+
+  cat("\\begin{minipage}{\\linewidth}\n")
+  cat("\\begin{verbatim}\n")
+  cat("REPORT ATTIVITA' CLINICA\n")
+  cat("Dati aggiornati al", format(max(lista_df[["0) Df completo"]]$Data), "%d-%m-%Y"))
+  cat("\\end{verbatim}\n")
+  cat("\\end{minipage}\\vspace{1.5em}\n")
+
+  for (i in seq_along(lista_df)) {
+    nome_attuale <- nomi_df[i]
+    df_attuale   <- lista_df[[i]]
+    
+    if (nome_attuale != "0) Df completo") {
+      tabella_testo <- knitr::kable(df_attuale, format = "simple", align = "l")
+      righe_tabella <- unlist(strsplit(as.character(tabella_testo), "\n"))
+      larghezza_tabella <- max(nchar(righe_tabella))
+      linea_separatrice <- paste(rep("-", larghezza_tabella), collapse = "")
+      cat("\\begin{minipage}{\\linewidth}\n")
+      cat("\\begin{verbatim}\n")
+      cat(toupper(nome_attuale), "\n")
+      cat(linea_separatrice, "\n")
+      cat(tabella_testo, sep = "\n")
+      cat(linea_separatrice, "\n")
+      cat("\\end{verbatim}\n")
+      cat("\\end{minipage}\n")
+      cat("\\vspace{1.5em}\n\n")
+    }
+  }
+}
+```

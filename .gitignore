@@ -4,8 +4,10 @@
 .Ruserdata
 .Rproj.user/
 *.Rproj
+*.bat
 
 # --- Temporary output files ---
 *.log
 *.utf8.md
 *.knit.md
+*.pdf
