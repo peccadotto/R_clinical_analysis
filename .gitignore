@@ -9,9 +9,8 @@
 # --- Temporary output files ---
 *.log
 *.pdf
+*.html
 *.utf8.md
 *.knit.md
-private/
-report_version_2_plot_files/
-report_version_2.pdf
-report_version_2_plot.html
+*_ita.*
+*_files/
