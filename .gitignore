@@ -8,6 +8,10 @@
 
 # --- Temporary output files ---
 *.log
+*.pdf
 *.utf8.md
 *.knit.md
-*.pdf
+private/
+report_version_2_plot_files/
+report_version_2.pdf
+report_version_2_plot.html

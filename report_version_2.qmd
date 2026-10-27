@@ -30,52 +30,49 @@ format:
           \fancyhf{} % Ripulisce i default
           \renewcommand{\headrulewidth}{0pt}
           \renewcommand{\footrulewidth}{0pt}
-          \fancyfoot[L]{\texttt{Data stampa:~\the\day-\ifnum\month<10 0\fi\the\month-\the\year\ \printtime}}
-          \fancyfoot[R]{\texttt{Pagina \thepage\ di \pageref*{LastPage}}}
+          \fancyfoot[L]{\texttt{Print date:~\the\day-\ifnum\month<10 0\fi\the\month-\the\year\ \printtime}}
+          \fancyfoot[R]{\texttt{Page \thepage\ of \pageref*{LastPage}}}
 ---
+
+```{r}
+#| include: false
+library(tidyverse)
+```
 
 ```{r}
 #| echo: false
 #| results: asis
 
 options(width = 150, tibble.width = Inf)
-dati_caricati <- readRDS("data/export.rds")
+df_list <- readRDS("data/export.rds")
 
-if (is.environment(dati_caricati)) {
-  lista_df <- as.list(dati_caricati)
-} else if (is.list(dati_caricati)) {
-  lista_df <- dati_caricati
+if (length(df_list) == 0) {
+  cat("No dataframes found in export.rds file.\n")
 } else {
-  lista_df <- list(dati_export = dati_caricati)
-}
-
-if (length(lista_df) == 0) {
-  cat("Nessun data frame rilevato nel file export.rds.\n")
-} else {
-  nomi_df <- names(lista_df)
+  df_names <- names(df_list)
 
   cat("\\begin{minipage}{\\linewidth}\n")
   cat("\\begin{verbatim}\n")
-  cat("REPORT ATTIVITA' CLINICA\n")
-  cat("Dati aggiornati al", format(max(lista_df[["0) Df completo"]]$Data), "%d-%m-%Y"))
+  cat("PERSONAL CLINICAL ACTIVITY\n\n")
+  cat("Last data update:", format(max(df_list[["0) Complete"]]$Date), "%d-%m-%Y"))
   cat("\\end{verbatim}\n")
   cat("\\end{minipage}\\vspace{1.5em}\n")
 
-  for (i in seq_along(lista_df)) {
-    nome_attuale <- nomi_df[i]
-    df_attuale   <- lista_df[[i]]
+  for (i in seq_along(df_list)) {
+    df_name <- df_names[i]
+    df <- df_list[[i]]
     
-    if (nome_attuale != "0) Df completo") {
-      tabella_testo <- knitr::kable(df_attuale, format = "simple", align = "l")
-      righe_tabella <- unlist(strsplit(as.character(tabella_testo), "\n"))
-      larghezza_tabella <- max(nchar(righe_tabella))
-      linea_separatrice <- paste(rep("-", larghezza_tabella), collapse = "")
+    if (df_name != "0) Complete") {
+      tbl_txt <- knitr::kable(df, format = "simple", align = "l")
+      tbl_rows <- unlist(strsplit(as.character(tbl_txt), "\n"))
+      tbl_width <- max(nchar(tbl_rows))
+      sep <- paste(rep("-", tbl_width), collapse = "")
       cat("\\begin{minipage}{\\linewidth}\n")
       cat("\\begin{verbatim}\n")
-      cat(toupper(nome_attuale), "\n")
-      cat(linea_separatrice, "\n")
-      cat(tabella_testo, sep = "\n")
-      cat(linea_separatrice, "\n")
+      cat(str_replace(toupper(df_name), "PVT ", ""), "\n")
+      cat(sep, "\n")
+      cat(tbl_txt, sep = "\n")
+      cat(sep, "\n")
       cat("\\end{verbatim}\n")
       cat("\\end{minipage}\n")
       cat("\\vspace{1.5em}\n\n")

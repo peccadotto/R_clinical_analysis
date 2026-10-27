@@ -1,0 +1,634 @@
+---
+title: "- PERSONAL CLINICAL ACTIVITY ANALYSIS -"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: body
+    number-sections: true
+    # back-to-top-navigation: true
+    smooth-scroll: true
+    include-in-header:
+      text: |
+        <style>
+        #back-to-top-btn {
+          position: fixed;
+          bottom: 25px;
+          right: 25px;
+          display: none;
+          z-index: 99;
+          background-color: #0d6efd;
+          color: white;
+          border: none;
+          outline: none;
+          padding: 8px 14px;
+          border-radius: 50px;
+          font-size: 14px;
+          box-shadow: 0px 4px 10px rgba(0,0,0,0.15);
+          cursor: pointer;
+          transition: opacity 0.3s;
+        }
+        #back-to-top-btn:hover {
+          background-color: #0b5ed7;
+        }
+        </style>
+    include-after-body:
+      text: |
+        <button id="back-to-top-btn" title="Back to top">Back to top</button>
+        <script>
+        const btn = document.getElementById("back-to-top-btn");
+        window.onscroll = function() {
+          if (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300) {
+            btn.style.display = "block";
+          } else {
+            btn.style.display = "none";
+          }
+        };
+        btn.onclick = function() {
+          window.scrollTo({top: 0, behavior: 'smooth'});
+        };
+        </script>
+editor: visual
+---
+
+```{=html}
+<style>
+
+h1, h2, h3, h4 {
+  font-weight: bold;
+  text-align: left;
+}
+h1 {
+  text-align: center;
+  margin-bottom: 25px !important;
+}
+body {
+    font-family: "Calibri", sans-serif;
+    text-align: justify;
+    font-size: 11pt;
+  }
+table {
+  width: auto !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+a {
+  text-decoration: none;
+}
+#TOC {
+  margin-bottom: 40px;
+}
+</style>
+```
+
+```{r}
+#| label: setup
+#| include: false
+library(kableExtra)
+library(tidyverse)
+library(lubridate)
+library(treemap)
+
+df_list <- readRDS("data/export.rds")
+
+# Create plot theme
+  my_plot_theme <- theme_minimal() +
+    theme(
+      plot.title = element_text(face = "bold", size = 18, hjust = 0.5, margin = margin(t = 10, b = 20)),
+      axis.title = element_text(face = "bold", size = 12),
+      axis.text  = element_text(face = "bold", size = 12),
+      axis.text.x = element_text(hjust = 0.5, face = "bold", size = 9),
+      axis.line  = element_line(color = "black", size = 0.5),
+      axis.ticks = element_line(color = "black"),
+      legend.text = element_text(size = 8)
+    )
+  
+```
+
+## 📈 SERVICES by PLACE
+
+📌 The figure below provides a comparative overview of the total number of healthcare services rendered **across all operational locations**[^1]
+
+[^1]: CAM = Humanitas Medical Care, Bergamo (Camozzi) \| HMC = Humanitas Medical Care, Monza \| ICH = "Istituto Clinico Humanitas" - "Humanitas Ressearch Hospital", Rozzano (MI) \| ICZ = "Istituti Clinici Zucchi", Monza \| MOD = Poliambualtorio "Modoetia", Monza \| POLI = "Fondazione IRCCS Ca' Granda - Ospedale Maggiore Policlinico", Milano \| SAL = Private practice, Salerno
+
+```{r}
+#| label: table_services_by_place
+#| echo: false
+
+df_rep_place <- df_list[[2]]
+
+df_rep_place |>
+  mutate(
+    Start = format(as.Date(Start), "%d-%m-%Y"),
+    End = format(as.Date(End), "%d-%m-%Y")
+  ) |>
+  kbl(align = "c")|>
+  kable_styling(
+    bootstrap_options = "striped",
+    full_width = FALSE,
+    position = "center"
+  )
+```
+
+```{r}
+#| label: plot_services_by_place
+#| echo: false
+#| fig.align: 'center'
+
+ggplot(
+  data = df_rep_place,
+  aes(x = reorder(Place, -Patients))
+) +
+  geom_bar(
+    aes(y = Patients),
+    stat = "identity",
+    fill = "steelblue2",
+    color = "black",
+    alpha = 0.6
+  ) +
+  geom_text(
+    aes(
+      y = Patients,
+      label = Patients
+    ),
+    vjust = -0.5,
+    fontface = "bold",
+    size = 4
+  ) +
+  scale_x_discrete(
+    name =""
+  ) +
+  scale_y_continuous(
+    name = "",
+    limits = c(0, max(df_rep_place$Patients) * 1.1),
+    breaks = seq(0, max(df_rep_place$Patients) * 1.1, by = 1000),
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  labs(
+    title = paste0(
+      "SERVICES by PLACE (",
+      year(min(df_rep_place$Start)),
+      " - ",
+      year(max(df_rep_place$End)),
+      ")"
+    )
+  ) +
+  my_plot_theme
+```
+
+## 📈 SERVICES by YEAR
+
+📌 The following chart presents the total volume of surgeries and procedures **performed by year**, illustrating the annual trends and workload distribution over time
+
+```{r}
+#| label: table_services_by_year
+#| echo: false
+
+df_rep_year <- df_list[[3]]
+
+df_rep_year |>
+  kbl(align = "c")|>
+  kable_styling(
+    bootstrap_options = "striped", 
+    full_width = FALSE,      
+    position = "center"
+  )
+```
+
+```{r}
+#| label: plot_services_by_year
+#| echo: false
+#| fig.align: 'center'
+
+ggplot(
+  data = df_rep_year,
+  aes(
+    x = Year,
+    y = Patients
+  )
+) +
+  geom_bar(
+    aes(y = Patients),
+    stat = "identity",
+    fill = "steelblue2",
+    color = "black",
+    alpha = 0.6
+  ) +
+  geom_text(
+    aes(
+      y = Patients,
+      label = Patients
+    ),
+    vjust = -0.5,
+    fontface = "bold",
+    size = 4
+  ) +
+  scale_x_continuous(
+    name ="",
+    breaks = seq(
+      min(df_rep_year$Year),
+      max(df_rep_year$Year),
+      by = 1
+    )
+  ) +
+  scale_y_continuous(
+    name = "",
+    limits = c(0, max(df_rep_year$Patients) * 1.1),
+    breaks = seq(0, max(df_rep_year$Patients) * 1.1, by = 250),
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  labs(
+    title = paste0(
+      "SERVICES by YEAR (",
+      min(df_rep_year$Year),
+      " - ",
+      max(df_rep_year$Year),
+      ")"
+    )
+  ) +
+  my_plot_theme
+```
+
+## 📈 SERVICES by MONTH
+
+📌 The following chart presents the total volume of surgeries and procedures **byformed monthly**, illustrating the annual trends and workload distribution over the whole year
+
+```{r}
+#| label: table_services_by_month
+#| echo: false
+
+df_rep_month <- df_list[[4]]
+
+df_rep_month |>
+  kbl(align = "c")|>
+  kable_styling(
+    bootstrap_options = "striped", 
+    full_width = FALSE,      
+    position = "center"
+  )|>
+  row_spec(which.max(df_rep_month$Patients), bold = TRUE, color = "red")
+```
+
+```{r}
+#| label: plot_services_by_month
+#| echo: false
+#| fig.align: 'center'
+
+ggplot(
+  data = df_rep_month,
+  aes(
+    x = Month,
+    y = Patients
+  )
+) +
+  geom_bar(
+    aes(y = Patients),
+    stat = "identity",
+    fill = "steelblue2",
+    color = "black",
+    alpha = 0.6
+  ) +
+  geom_text(
+    aes(
+      y = Patients,
+      label = Patients
+    ),
+    vjust = -0.5,
+    fontface = "bold",
+    size = 4
+  ) +
+  scale_x_discrete(
+    name ="",
+  ) +
+  scale_y_continuous(
+    name = "",
+    limits = c(0, max(df_rep_year$Patients) * 1.1),
+    breaks = seq(0, max(df_rep_year$Patients) * 1.1, by = 250),
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  labs(
+    title = "SERVICES by MONTH"
+  ) +
+  my_plot_theme
+```
+
+## 📈 SERVICES by TIME SLOT
+
+📌 The following chart displays the distribution of procedures **across daily time slots** (from 8:00 AM - 08:00 PM), highlighting the occupancy level for each time slot
+
+```{r}
+#| label: table_services_by_slot
+#| echo: false
+
+df_rep_slot <- df_list[[5]]
+
+df_rep_slot |>
+  kbl(align = "c")|>
+  kable_styling(
+    bootstrap_options = "striped", 
+    full_width = FALSE,      
+    position = "center"
+  ) |>
+  row_spec(which.max(df_rep_slot$Patients), bold = TRUE, color = "red")
+```
+
+```{r}
+#| label: plot_services_by_slot
+#| echo: false
+#| fig.align: 'center'
+
+ggplot(
+  data = df_rep_slot,
+  aes(
+    x = Slot,
+    y = Patients
+  )
+) +
+  geom_bar(
+    aes(y = Patients),
+    stat = "identity",
+    fill = "steelblue2",
+    color = "black",
+    alpha = 0.6
+  ) +
+  geom_text(
+    aes(
+      y = Patients,
+      label = Patients
+    ),
+    vjust = -0.5,
+    fontface = "bold",
+    size = 4
+  ) +
+  scale_x_discrete(
+    name ="",
+  ) +
+  scale_y_continuous(
+    name = "",
+    limits = c(0, max(df_rep_year$Patients) * 1.1),
+    breaks = seq(0, max(df_rep_year$Patients) * 1.1, by = 250),
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  labs(
+    title = "SERVICES by TIME SLOT"
+  ) +
+  my_plot_theme
+```
+
+## 📈 SERVICES PROVIDED
+
+📌 This chart details the breakdown of clinical activity by service type, highlighting the volume distribution between initial consultations, follow-up visits, and specialized procedures[^2]
+
+[^2]: VISORT01 = Initial consultation \| VISORT02 = Follow-up consultation \| ECTBAC = Hip ultrasound for DDH screening \| MISC = Other services (e.g. cast removal, intra-articular or botulin injection)
+
+```{r}
+#| label: table_services
+#| echo: false
+
+df_rep_service <- df_list[[6]]
+
+df_rep_service |>
+  kbl(align = "c")|>
+  kable_styling(
+    bootstrap_options = "striped", 
+    full_width = FALSE,      
+    position = "center"
+  ) |>
+  row_spec(which.max(df_rep_service$Patients), bold = TRUE, color = "red")
+```
+
+```{r}
+#| label: plot_services_treemap
+#| echo: false
+#| fig.align: 'center'
+
+df_rep_service <- df_rep_service |>
+  mutate(
+    bycentage = round((Patients / sum(Patients)) * 100, 1),
+    Label = paste0(Service, " - ", bycentage, "%")
+  )
+
+treemap(
+  df_rep_service,
+  index = "Label",
+  vSize = "Patients",
+  type = "index",
+  palette = c("#5ACEFF", "#4682B4", "#2B60DE", "#104E8B"),
+  border.col = "black",
+  border.lwds = 1.5,
+  fontsize.labels = 12,
+  fontface.labels = "bold",
+  fontcolor.labels = "white",
+  title = ""
+)
+```
+
+## 📈 SERVICES by SYSTEM
+
+📌 This chart details the proportion of clinical activity **according to the practice regime**[^3]
+
+[^3]: INS = Insured patients \| NHS = National Health System \| PRV = Private practice \| TBD = To be defined
+
+```{r}
+#| label: table_system
+#| echo: false
+
+df_rep_system <- df_list[[7]] |> arrange(System)
+
+df_rep_system |>
+  kbl(align = "c")|>
+  kable_styling(
+    bootstrap_options = "striped", 
+    full_width = FALSE,      
+    position = "center"
+  ) |>
+  row_spec(which.max(df_rep_system$Patients), bold = TRUE, color = "red")
+```
+
+```{r}
+#| label: plot_system_treemap
+#| echo: false
+#| fig.align: 'center'
+
+df_rep_system <- df_rep_system |>
+  mutate(
+    bycentage = round((Patients / sum(Patients)) * 100, 1),
+    Label = paste0(System, " - ", bycentage, "%")
+  )
+
+treemap(
+  df_rep_system,
+  index = "Label",
+  vSize = "Patients",
+  type = "index",
+  palette = c("#5ACEFF", "#4682B4", "#2B60DE", "#104E8B"),
+  border.col = "black",
+  border.lwds = 1.5,
+  fontsize.labels = 12,
+  fontface.labels = "bold",
+  fontcolor.labels = "white",
+  title = ""
+)
+```
+
+## 📈 SERVICES by PLACE by YEAR
+
+📌 The figure below illustrates the distribution and evolution of healthcare services rendered **across operational locations broken down by year**, highlighting annual volume trends by facility
+
+```{r}
+#| label: table_place_by_year
+#| echo: false
+
+df_rep_place_by_year <- df_list[[8]]
+
+df_rep_place_by_year |>
+  kbl(align = "c")|>
+  kable_styling(
+    bootstrap_options = "striped", 
+    full_width = FALSE,      
+    position = "center"
+  ) |>
+  row_spec(nrow(df_rep_place_by_year), bold = TRUE) |>
+  row_spec(nrow(df_rep_place_by_year), italic = TRUE)
+```
+
+```{r}
+#| label: plot_place_by_year
+#| echo: false
+#| fig.align: 'center'
+
+df_long_place_year <- df_rep_place_by_year |>
+  filter(Year != "Total") |>
+  pivot_longer(
+    cols = c(ICH, SAL, MOD, ICZ, POL, HMC, CAM),
+    names_to = "Place",
+    values_to = "Patients"
+  ) |>
+  mutate(
+    Place = factor(
+      Place, 
+      levels = c("ICH", "SAL", "MOD", "ICZ", "POL", "HMC", "CAM")
+    )
+  )
+
+ggplot(
+  data = df_long_place_year,
+  aes(
+    x = as.factor(Year),
+    y = Patients,
+    fill = Place
+  )
+) +
+  geom_bar(
+    stat = "identity",
+    color = "black",
+    alpha = 0.6,
+    position = "stack"
+  ) +
+  scale_fill_manual(
+    values = c("#8AD2FF", "#5ACEFF", "#4682B4", "#3871E9", "#2B60DE", "#1D55B8", "#104E8B")
+  ) +
+  scale_x_discrete(
+    name = ""
+  ) +
+  scale_y_continuous(
+    name = "",
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  labs(
+    title = paste0(
+      "SERVICES by PLACE by YEAR (",
+      min(df_long_place_year$Year),
+      " - ",
+      max(df_long_place_year$Year),
+      ")"
+    ),
+    fill = ""
+  ) +
+  my_plot_theme +
+  theme(
+    legend.position = "bottom"
+  )
+```
+
+## 📈 SERVICES by TYPE by YEAR
+
+📌 The following figure presents the annual evolution of clinical services **classified by type and year**, highlighting shifts in procedural volumes over the observation period
+
+```{r}
+#| label: table_type_by_year
+#| echo: false
+
+df_rep_type_by_year <- df_list[[9]]
+
+df_rep_type_by_year |>
+  kbl(align = "c")|>
+  kable_styling(
+    bootstrap_options = "striped", 
+    full_width = FALSE,      
+    position = "center"
+  ) |>
+  row_spec(nrow(df_rep_type_by_year), bold = TRUE) |>
+  row_spec(nrow(df_rep_type_by_year), italic = TRUE)
+```
+
+```{r}
+#| label: plot_services_type_by_year
+#| echo: false
+#| fig.align: 'center'
+
+df_long_type_year <- df_rep_type_by_year |>
+  filter(Year != "Total") |>
+  pivot_longer(
+    cols = c(VISORT01, VISORT02, ECTBAC, MISC),
+    names_to = "Service",
+    values_to = "Patients"
+  ) |>
+  mutate(
+    Service = factor(
+      Service, 
+      levels = c("VISORT01", "VISORT02", "ECTBAC", "MISC")
+    )
+  )
+
+ggplot(
+  data = df_long_type_year,
+  aes(
+    x = as.factor(Year),
+    y = Patients,
+    fill = Service
+  )
+) +
+  geom_bar(
+    stat = "identity",
+    color = "black",
+    alpha = 0.6,
+    position = "stack"
+  ) +
+  scale_fill_manual(
+    values = c("#5ACEFF", "#4682B4", "#2B60DE", "#104E8B"),
+    guide = guide_legend(reverse = TRUE)
+  ) +
+  scale_x_discrete(
+    name = ""
+  ) +
+  scale_y_continuous(
+    name = "",
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  labs(
+    title = paste0(
+      "SERVICES by TYPE by YEAR (",
+      min(df_long_type_year$Year),
+      " - ",
+      max(df_long_type_year$Year),
+      ")"
+    ),
+    fill = ""
+  ) +
+  my_plot_theme +
+  theme(
+    legend.position = "bottom",
+    legend.text = element_text(size = 9)
+  )
+```

@@ -7,6 +7,7 @@
     "lubridate",
     "quarto",
     "scales",
+    "treemap",
     "writexl"
   )
 
@@ -16,7 +17,12 @@
       tryCatch(
         install.packages(pkg, dependencies = TRUE),
         error = function(e) {
-          message("!! Error while trying to install the '", pkg, "' package: ", e$message)
+          message(
+            "!! Error while trying to install the '",
+            pkg,
+            "' package: ",
+            e$message
+          )
         }
       )
     }
@@ -24,220 +30,212 @@
   }
   
   rm(list = ls())
-  as_euro <- function (x) {currency(x, symbol = "€", big.mark = ".", decimal.mark = ",", sep = " ")}
-  Sys.setenv(QUARTO_PATH = "C:\\Program Files\\RStudio\\resources\\app\\bin\\quarto\\bin\\quarto.exe")
   
-# Importa dati
+# 1) Data import
   
-  df_camozzi <- read.csv("data/camozzi.csv", sep = ";", header = TRUE)     |> mutate(Sede = "CAM")
-  df_humanitas <- read.csv("data/humanitas.csv", sep = ";", header = TRUE)   |> mutate(Sede = "ICH")
-  df_medcare  <- read.csv("data/medcare.csv", sep = ";", header = TRUE)     |> mutate(Sede = "HMC")
-  df_modoetia <- read.csv("data/modoetia.csv", sep = ";", header = TRUE)    |> mutate(Sede = "MOD")
-  df_policlinico <- read.csv("data/policlinico.csv", sep = ";", header = TRUE) |> mutate(Sede = "POL")
-  df_levante <- read.csv("data/salerno.csv", sep = ";", header = TRUE)     |> mutate(Sede = "SAL")
-  df_zucchi <- read.csv("data/zucchi.csv", sep = ";", header = TRUE)      |> mutate(Sede = "ICZ")
+  df_camozzi <- read.csv("data/camozzi.csv", sep = ";", header = TRUE) |>
+    select(-Income) |> mutate(Place = "CAM")
+  df_humanitas <- read.csv("data/humanitas.csv", sep = ";", header = TRUE) |>
+    select(-Income) |> mutate(Place = "ICH")
+  df_medcare  <- read.csv("data/medcare.csv", sep = ";", header = TRUE) |>
+    select(-Income) |> mutate(Place = "HMC")
+  df_modoetia <- read.csv("data/modoetia.csv", sep = ";", header = TRUE) |>
+    select(-Income) |> mutate(Place = "MOD")
+  df_poli <- read.csv("data/policlinico.csv", sep = ";", header = TRUE) |>
+    select(-Income) |> mutate(Place = "POL")
+  df_levante <- read.csv("data/salerno.csv", sep = ";", header = TRUE) |>
+    select(-Income) |> mutate(Place = "SAL")
+  df_zucchi <- read.csv("data/zucchi.csv", sep = ";", header = TRUE) |>
+    select(-Income) |> mutate(Place = "ICZ")
 
-# Unisci dati
+# 2) Data merge
   
-  nomi_df <- mget(ls(pattern = "^df_")); df <- bind_rows(nomi_df)
+  df_names <- mget(ls(pattern = "^df_"))
+  df <- bind_rows(df_names)
   df <- df |>
     mutate(
-    Data = dmy(Data),
-    Ora = hm(Ora),
-    Prestazione = factor(Prestazione, levels = c("VISORT01", "VISORT02", "ECTBAC", "MISC")),
-    Netto = parse_number(Netto, locale = locale(decimal_mark = ",", grouping_mark = "."))/100,
-    Anno = year(Data),
-    Mese = month(Data)
+    Date = dmy(Date),
+    Time = hm(Time),
+    Service = factor(
+      Service,
+      levels = c("VISORT01", "VISORT02", "ECTBAC", "MISC")
+    ),
+    Year = year(Date),
+    Month = month(Date)
   ) |>
-    # Raddoppia le righe con ECTBAC (per contare il n° di ecografie e non i singoli pz)
-    mutate(moltiplicatore = if_else(stringr::str_trim(Prestazione) == "ECTBAC", 2, 1)) |> 
-    uncount(moltiplicatore) |>
-    # Correggi il costo della singola ecografia
-    mutate(Netto = ifelse(Prestazione == "ECTBAC", Netto / 2, Netto)) |>
-    arrange(Data, Ora)
+    mutate(multiplier = if_else(Service == "ECTBAC", 2, 1)) |> 
+      # Double the records with Service = ECTBAC
+      # (count ultrasounds, not patients)
+    uncount(multiplier) |>
+    arrange(Date, Time)
 
-# Crea report
+# 3) Report creation
 
-  df_pvt_sede <- df |>
-    group_by(Sede) |>
+  df_pvt_place <- df |>
+    group_by(Place) |>
     summarise(
-      N = n(),
-      Inizio = min(Data),
-      Fine = max(Data),
-      Durata = sub(" 0H 0M 0S$", "", as.period(Inizio %--% Fine)),
-      N_yr = if_else(time_length(Inizio %--% Fine, unit = "years") >= 1, as.integer(N / time_length(Inizio %--% Fine, unit = "years")), 0),
-      EUR = sum(Netto, na.rm = TRUE),
-      EUR_yr = if_else(time_length(Inizio %--% Fine, unit = "years") >= 1, EUR / time_length(Inizio %--% Fine, unit = "years"), 0),
-      EUR_pz = sum(Netto[Netto > 0], na.rm = TRUE) / sum(Netto > 0, na.rm = TRUE)
+      Patients = n(),
+      Start = min(Date),
+      End = max(Date),
+      Span = sub(" 0H 0M 0S$", "", as.period(Start %--% End)),
+      `Patients/year` = if_else(
+        time_length(Start %--% End, unit = "years") >= 1,
+        as.integer(Patients / time_length(Start %--% End, unit = "years")),
+        0
+      ),
     ) |>
+    arrange(Start) |>
     mutate(
-      EUR = as_euro(EUR),
-      EUR_yr = as_euro(EUR_yr),
-      EUR_pz = as_euro(EUR_pz)
+      `Patients (running)` = cumsum(Patients)
     ) |>
-    relocate (N, .after = Durata) |>
-    arrange(Inizio) |>
-    adorn_totals(where = "row", fill = "", na.rm = TRUE, name = "Totale", columns = c("N", "EUR")) |>
-    rename(
-      'N/anno' = N_yr,
-      Fatturato = EUR,
-      '€/anno' = EUR_yr,
-      '€/paziente' = EUR_pz
+    relocate (
+      c(Patients, `Patients (running)`),
+      .after = Span
     ) |>
     as_tibble() |> print()
   
-  df_pvt_anno <- df |>
-    group_by(Anno) |>
+  df_pvt_year <- df |>
+    group_by(Year) |>
     summarise(
-      N = n(),
-      EUR = sum(Netto, na.rm = TRUE)
+      Patients = n()
     ) |>
     mutate(
-      N_cum = cumsum(N), 
-      EUR = as_euro(EUR),
-      EUR_cum = as_euro(cumsum(EUR))
-    ) |>
-    relocate(N_cum, .after = N) |>
-    rename(
-      'N (cum)' = N_cum,
-      Fatturato = EUR,
-      'Fatturato (cum)' = EUR_cum
+      `Patients (running)` = cumsum(Patients)
     ) |>
     as_tibble() |> print() 
 
-  df_pvt_prestazione <- df |>
-    group_by(Prestazione) |>
+  df_pvt_month <- df |>
+    mutate(
+      Month = factor(
+        Month,
+        levels = 1:12, 
+        labels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"), 
+        ordered = TRUE)
+    ) |>
+    group_by(Month) |>
     summarise(
-      N = n(),
-      EUR = sum(Netto, na.rm = TRUE),
-      Paganti = sum(Netto > 0, na.rm = TRUE),
-      EUR_pz = if_else(Paganti > 0, EUR / Paganti, 0)
-    ) |>
-    select(-Paganti) |>
-    arrange(desc(N)) |>
-    mutate(
-      Pct = N / sum(N),
-      Pct_cum = cumsum(Pct),
+      Patients = n()
     ) |>
     mutate(
-      Pct = percent(Pct, accuracy = 0.01),
-      Pct_cum = percent(Pct_cum, accuracy = 0.01),
-      EUR = as_euro(EUR),
-      EUR_pz = as_euro(EUR_pz)
+      `%` = Patients/sum(Patients),
+      `% (running)` = cumsum(`%`)
     ) |>
-    relocate(Pct:Pct_cum, .after = N) |>
-    rename(
-      '%' = Pct,
-      '% (cum)' = Pct_cum,
-      Fatturato = EUR,
-      'Fatturato/paziente' = EUR_pz
+    mutate(
+      `%` = percent(`%`, accuracy = 0.01),
+      `% (running)` = percent(`% (running)`, accuracy = 0.01)
     ) |>
-    as_tibble() |> print()  
+    as_tibble() |> print() 
 
-  df_pvt_regime <- df |>
-    group_by(Regime) |>
-    summarise(
-      N = n(),
-      EUR = sum(Netto, na.rm = TRUE),
-      EUR_pz = EUR / N
-    ) |>
-    arrange(desc(N)) |>
+  df_pvt_slot <- df |>
+    filter(Time > 0) |>
+    filter(((Time >= hm("08:00")) & Time <= hm("20:00"))) |>
     mutate(
-      Pct = N / sum(N),
-      Pct_cum = cumsum(Pct)
-    ) |>
-    mutate(
-      Regime = ifelse(Regime != "", Regime, "TBD"),
-      Pct = percent(Pct, accuracy = 0.01),
-      Pct_cum = percent(Pct_cum, accuracy = 0.01), 
-      EUR = as_euro(EUR),
-      EUR_pz = as_euro(EUR_pz)
-    ) |>
-    relocate(Pct:Pct_cum, .after = N) |>
-    rename(
-      '%' = Pct,
-      '% (cum)' = Pct_cum,
-      Fatturato = EUR,
-      'Fatturato/paziente' = EUR_pz
-    ) |>
-    as_tibble() |> print()
-  
-  df_pvt_orario <- df |>
-    filter(Ora > 0) |>
-    filter(((Ora >= hm("08:00")) & Ora <= hm("20:00"))) |>
-    mutate(
-      Orario = case_when(
-        Ora >= hm("08:00") & Ora < hm("10:00") ~ "08:00 - 10:00",
-        Ora >= hm("10:00") & Ora < hm("12:00") ~ "10:00 - 12:00",
-        Ora >= hm("12:00") & Ora < hm("14:00") ~ "12:00 - 14:00",
-        Ora >= hm("14:00") & Ora < hm("16:00") ~ "14:00 - 16:00",
-        Ora >= hm("16:00") & Ora < hm("18:00") ~ "16:00 - 18:00",
-        Ora >= hm("18:00") & Ora < hm("20:00") ~ "18:00 - 20:00"
+      Slot = case_when(
+        Time >= hm("08:00") & Time < hm("10:00") ~ "08:00 - 10:00",
+        Time >= hm("10:00") & Time < hm("12:00") ~ "10:00 - 12:00",
+        Time >= hm("12:00") & Time < hm("14:00") ~ "12:00 - 14:00",
+        Time >= hm("14:00") & Time < hm("16:00") ~ "14:00 - 16:00",
+        Time >= hm("16:00") & Time < hm("18:00") ~ "16:00 - 18:00",
+        Time >= hm("18:00") & Time < hm("20:00") ~ "18:00 - 20:00"
       )
     ) |>
-    group_by(Orario) |>
+    group_by(Slot) |>
     summarise(
-      N = n(),
-      Giorni_Lavorati = n_distinct(Data), 
+      Patients = n(),
+      Worked_days = n_distinct(Date), 
       .groups = "drop"
     ) |>
     mutate(
-      Slot_Massimi = Giorni_Lavorati * 6,
-      Pct = N / sum(N),
-      Pct_cum = cumsum(Pct),
-      Sat = N / Slot_Massimi
+      Slot_max = Worked_days * 6,
+      `%` = Patients / sum(Patients),
+      `% (running)` = cumsum(`%`),
+      `% occupancy` = Patients / Slot_max
     ) |>
     mutate(
-      Pct = percent(Pct, accuracy = 0.01),
-      Pct_cum = percent(Pct_cum, accuracy = 0.01),
-      Sat = percent(Sat, accuracy = 0.01)
+      `%` = percent(`%`, accuracy = 0.01),
+      `% (running)` = percent(`% (running)`, accuracy = 0.01),
+      `% occupancy` = percent(`% occupancy`, accuracy = 0.01)
     ) |>
-    select(-c(Slot_Massimi, Giorni_Lavorati)) |>
-    rename(
-      '%' = Pct,
-      '% (cum)' = Pct_cum,
-      '% saturazione' = Sat
+    select(-c(Slot_max, Worked_days)) |>
+    as_tibble() |> print()
+  
+  df_pvt_service <- df |>
+    group_by(Service) |>
+    summarise(
+      Patients = n()
+    ) |>
+    arrange(desc(Patients)) |>
+    mutate(
+      `%` = Patients / sum(Patients),
+      `% (running)` = cumsum(`%`),
+    ) |>
+    mutate(
+      `%` = percent(`%`, accuracy = 0.01),
+      `% (running)` = percent(`% (running)`, accuracy = 0.01)
+    ) |>
+    as_tibble() |> print()  
+
+  df_pvt_system <- df |>
+    group_by(System) |>
+    summarise(
+      Patients = n()
+    ) |>
+    arrange(desc(Patients)) |>
+    mutate(
+      `%` = Patients / sum(Patients),
+      `% (running)` = cumsum(`%`)
+    ) |>
+    mutate(
+      System = ifelse(System != "", System, "TBD"),
+      `%` = percent(`%`, accuracy = 0.01),
+      `% (running)` = percent(`% (running)`, accuracy = 0.01)
     ) |>
     as_tibble() |> print()
   
-  df_pvt_sede_wide <- df |>
-    select(Sede, Anno) |>
+df_pvt_place_wide <- df |>
+    select(Place, Year) |>
     pivot_wider(
-      names_from = Sede,
-      values_from = Sede,
+      names_from = Place,
+      values_from = Place,
       values_fn = length,
       values_fill = 0
     ) |> 
-    arrange(Anno) |>
-    adorn_totals(where = c("row", "col"), name = "Totale") |>
+    arrange(Year) |>
+    adorn_totals(where = c("row", "col"), name = "Total") |>
     as_tibble() |> print()
   
-  df_pvt_prestazione_wide <- df |>
-    count(Prestazione, Anno) |>
+  df_pvt_service_wide <- df |>
+    count(Service, Year) |>
     pivot_wider(
-      names_from = Prestazione,
+      names_from = Service,
       values_from = n,
       values_fill = 0
     ) |> 
-    arrange(Anno) |>
-    adorn_totals(where = c("row", "col"), name = "Totale") |>
+    arrange(Year) |>
+    adorn_totals(where = c("row", "col"), name = "Total") |>
     as_tibble() |> print()
 
-# Esporta dati
-  ls2save <- list(
-    "0) Df completo" = df,
-    "1) Pvt sede" = df_pvt_sede,
-    "2) Pvt anno" = df_pvt_anno,
-    "3) Pvt prestazione" = df_pvt_prestazione,
-    "4) Pvt regime" = df_pvt_regime,
-    "5) Pvt orario" = df_pvt_orario,
-    "6) Pvt sede per anno" = df_pvt_sede_wide,
-    "7) Pvt prestazione per anno" = df_pvt_prestazione_wide
+# 4) Data export
+
+ ls2save <- list(
+    "0) Complete" = df,
+    "1) PVT by PLACE" = df_pvt_place,
+    "2) PVT by YEAR" = df_pvt_year,
+    "3) PVT by MONTH" = df_pvt_month,
+    "4) PVT by SLOT" = df_pvt_slot,
+    "5) PVT by SERVICE" = df_pvt_service,
+    "6) PVT by SYSTEM" = df_pvt_system,
+    "7) PVT by PLACE-YEAR" = df_pvt_place_wide,
+    "8) PVT by SERVICE-YEAR" = df_pvt_service_wide
   )
   saveRDS(ls2save, file = "data/export.rds")
   write_xlsx(ls2save, path = "data/export.xlsx")
   ls2keep <- ls(pattern = "^df$|^df_pvt")
   rm(list = setdiff(ls(), ls2keep))
   
-  quarto_render("report_ver_2.qmd")
-  utils::browseURL("report_ver_2.pdf")
+  Sys.setenv(QUARTO_PATH = "C:\\Program Files\\RStudio\\resources\\app\\bin\\quarto\\bin\\quarto.exe")
+  quarto_render("report_version_2.qmd")
+  quarto_render("report_version_2_plot.qmd")
+  utils::browseURL("report_version_2.pdf")
+  utils::browseURL("report_version_2_plot.html")
