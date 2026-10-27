@@ -8,7 +8,6 @@
 
 # --- Temporary output files ---
 *.log
-*.html
 *.utf8.md
 *.knit.md
 *_ita.*
